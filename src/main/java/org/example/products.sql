@@ -27,6 +27,8 @@ SET time_zone = "+00:00";
 -- Struktura tabeli dla tabeli `products`
 --
 
+create database if not exists `shop`;
+
 CREATE TABLE `products` (
   `barcode` bigint(11) NOT NULL,
   `name` varchar(20) NOT NULL,
