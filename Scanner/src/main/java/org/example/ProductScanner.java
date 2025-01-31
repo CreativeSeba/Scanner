@@ -8,6 +8,10 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.text.ParseException;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.Scanner;
 
 public class ProductScanner {
@@ -39,6 +43,48 @@ public class ProductScanner {
 
     }
 
+    private long getCardNumber() {
+        System.out.println("Enter card number: ");
+
+        try {
+            long cardNumber = Long.parseLong(scn.nextLine());
+            String cardNumberCopy = String.valueOf(cardNumber);
+            if (cardNumberCopy.length() == 16)
+                return cardNumber;
+        } catch (NumberFormatException ignored) {
+        }
+
+        return 0;
+    }
+
+    private String getExpirationDate() {
+        System.out.println("Enter card's expiration date (YYYY-MM-DD): ");
+        String expirationDate = scn.nextLine();
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+        try {
+            LocalDate date = LocalDate.parse(expirationDate, formatter);
+            return expirationDate;
+        } catch (DateTimeParseException e) {
+            return null;
+        }
+
+    }
+
+    private int getCVV() {
+        System.out.println("Enter CVV: ");
+
+        try {
+            int cvv = Integer.parseInt(scn.nextLine());
+            String cvvCopy = String.valueOf(cvv);
+            if (cvvCopy.length() == 3) {
+                return cvv;
+            }
+        } catch (NumberFormatException e) {}
+
+        return 0;
+    }
+
     private void clearConsole() throws IOException, InterruptedException {
         new ProcessBuilder("cmd", "/c", "cls").inheritIO().start().waitFor();
     }
@@ -53,53 +99,64 @@ public class ProductScanner {
         clearConsole();
         cart.printProducts();
 
-        System.out.println("Enter card number: ");
-        long cardNumber = Long.parseLong(scn.nextLine());
-        System.out.println("Enter card's expiration date (YYYY-MM-DD): ");
-        String expirationDate = scn.nextLine();
-        System.out.println("Enter CVV: ");
-        int cvv = Integer.parseInt(scn.nextLine());
+        long cardNumber = getCardNumber();
 
-        String json = "{ \"cardNumber\": " + cardNumber +
-                ", \"expirationDate\": \"" + expirationDate + "\"" +
-                ", \"cvv\": " + cvv +
-                ", \"amount\": " + cart.total + " }";
+        if (cardNumber != 0) {
+            String expirationDate = getExpirationDate();
+            if (expirationDate != null) {
+                int cvv = getCVV();
+                if (cvv != 0) {
+                    String json = "{ \"cardNumber\": " + cardNumber +
+                            ", \"expirationDate\": \"" + expirationDate + "\"" +
+                            ", \"cvv\": " + cvv +
+                            ", \"amount\": " + cart.total + " }";
 
-        String urlString = "http://localhost:8080/api/payments";
+                    String urlString = "http://localhost:8080/api/payments";
 
-        try {
-            URL url = new URL(urlString);
-            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod("POST");
-            connection.setDoOutput(true);
-            connection.setRequestProperty("Content-Type", "application/json");
+                    try {
+                        URL url = new URL(urlString);
+                        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+                        connection.setRequestMethod("POST");
+                        connection.setDoOutput(true);
+                        connection.setRequestProperty("Content-Type", "application/json");
 
-            try (OutputStream os = connection.getOutputStream()) {
-                byte[] input = json.getBytes(StandardCharsets.UTF_8);
-                os.write(input, 0, input.length);
-            }
+                        try (OutputStream os = connection.getOutputStream()) {
+                            byte[] input = json.getBytes(StandardCharsets.UTF_8);
+                            os.write(input, 0, input.length);
+                        }
 
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(
-                    connection.getResponseCode() >= 200 && connection.getResponseCode() < 300 ?
-                            connection.getInputStream() : connection.getErrorStream()))) {
+                        try (BufferedReader reader = new BufferedReader(new InputStreamReader(
+                                connection.getResponseCode() >= 200 && connection.getResponseCode() < 300 ?
+                                        connection.getInputStream() : connection.getErrorStream()))) {
 
-                String response = reader.readLine().trim();
-                System.out.println("Server response: " + response);
+                            boolean response = Boolean.parseBoolean(reader.readLine().trim());
+                            // System.out.println("Server response: " + response);
 
-                if (Integer.parseInt(response) == 200) {
-                    System.out.println("Payment completed");
-                    cart.updateProducts();
-                    cart.clearCart();
-                    products.productsList.clear();
-                    products.getProducts();
-                } else {
-                    System.out.println("Payment failed");
+                            if (response) {
+                                System.out.println("Payment completed");
+                                cart.updateProducts();
+                                cart.clearCart();
+                                products.productsList.clear();
+                                products.getProducts();
+                            } else {
+                                System.out.println("Payment failed");
+                            }
+                        }
+
+
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+                else {
+                    System.out.println("Invalid cvv number");
                 }
             }
-
-
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+            else {
+                System.out.println("Invalid expiration date");
+            }
+        } else {
+            System.out.println("Invalid card number");
         }
     }
 
