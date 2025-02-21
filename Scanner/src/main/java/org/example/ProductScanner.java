@@ -38,7 +38,6 @@ public class ProductScanner {
                 break;
             default:
                 searchProduct(command);
-                break;
         }
 
     }
