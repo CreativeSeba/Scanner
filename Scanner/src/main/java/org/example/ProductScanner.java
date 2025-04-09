@@ -34,7 +34,7 @@ public class ProductScanner {
                 reset();
                 break;
             case "pay":
-                pay();
+                selectPayment();
                 break;
             default:
                 searchProduct(command);
@@ -94,10 +94,112 @@ public class ProductScanner {
         System.out.println("Cart has been reset");
     }
 
-    private void pay() throws IOException, InterruptedException {
+    private void searchProduct(String command) throws IOException, InterruptedException {
+        try {
+            long productBarcode = Long.parseLong(command);
+            Product productTemp = products.searchProduct(productBarcode);
+            if (productTemp != null) {
+                int currentQuantity = cart.products.getOrDefault(productTemp, 0);
+                if (currentQuantity < productTemp.stock) {
+                    cart.addProduct(productTemp);
+                    clearConsole();
+                    cart.printProducts();
+                } else {
+                    clearConsole();
+                    cart.printProducts();
+                    System.out.println("Product out of stock");
+                }
+
+            } else {
+                clearConsole();
+                cart.printProducts();
+                System.out.println("Product not found");
+            }
+        } catch (NumberFormatException | IOException | InterruptedException e) {
+            clearConsole();
+            cart.printProducts();
+            System.out.println("Invalid command");
+        }
+    }
+
+    private void selectPayment() throws IOException, InterruptedException {
         clearConsole();
         cart.printProducts();
+        System.out.println("Choose payment method (blik or card)");
+        String method = scn.nextLine();
+        switch (method){
+            case "blik":
+                payWithBlik();
+                break;
+            case "card":
+                payByCard();
+                break;
+            default:
+                selectPayment();
+                System.out.println("Choose corret payment method!");
+        }
+    }
 
+    private void payWithBlik() {
+        int blik = getBlik();
+        if (blik != 0) {
+            String json = "{ \"blikCode\": " + blik +
+                    ", \"amount\": " + cart.total + " }";
+
+            String urlString = "http://localhost:8080/api/payments/blik";
+
+            try {
+                URL url = new URL(urlString);
+                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+                connection.setRequestMethod("POST");
+                connection.setDoOutput(true);
+                connection.setRequestProperty("Content-Type", "application/json");
+
+                try (OutputStream os = connection.getOutputStream()) {
+                    byte[] input = json.getBytes(StandardCharsets.UTF_8);
+                    os.write(input, 0, input.length);
+                }
+
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(
+                        connection.getResponseCode() >= 200 && connection.getResponseCode() < 300 ?
+                                connection.getInputStream() : connection.getErrorStream()))) {
+
+                    boolean response = Boolean.parseBoolean(reader.readLine().trim());
+                    // System.out.println("Server response: " + response);
+
+                    if (response) {
+                        System.out.println("Payment completed");
+                        cart.updateProducts();
+                        cart.clearCart();
+                        products.productsList.clear();
+                        products.getProducts();
+                    } else {
+                        System.out.println("Payment failed");
+                    }
+                }
+
+
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
+
+    private int getBlik() {
+        System.out.println("Enter blik code: ");
+
+        try {
+            String blik = scn.nextLine();
+            if (blik.length() == 6) {
+                return Integer.parseInt(blik);
+            }
+        } catch (NumberFormatException e) {}
+
+        return 0;
+    }
+
+    private void payByCard(){
         long cardNumber = getCardNumber();
 
         if (cardNumber != 0) {
@@ -110,7 +212,7 @@ public class ProductScanner {
                             ", \"cvv\": " + cvv +
                             ", \"amount\": " + cart.total + " }";
 
-                    String urlString = "http://localhost:8080/api/payments";
+                    String urlString = "http://localhost:8080/api/payments/card";
 
                     try {
                         URL url = new URL(urlString);
@@ -156,34 +258,6 @@ public class ProductScanner {
             }
         } else {
             System.out.println("Invalid card number");
-        }
-    }
-
-    private void searchProduct(String command) throws IOException, InterruptedException {
-        try {
-            long productBarcode = Long.parseLong(command);
-            Product productTemp = products.searchProduct(productBarcode);
-            if (productTemp != null) {
-                int currentQuantity = cart.products.getOrDefault(productTemp, 0);
-                if (currentQuantity < productTemp.stock) {
-                    cart.addProduct(productTemp);
-                    clearConsole();
-                    cart.printProducts();
-                } else {
-                    clearConsole();
-                    cart.printProducts();
-                    System.out.println("Product out of stock");
-                }
-
-            } else {
-                clearConsole();
-                cart.printProducts();
-                System.out.println("Product not found");
-            }
-        } catch (NumberFormatException | IOException | InterruptedException e) {
-            clearConsole();
-            cart.printProducts();
-            System.out.println("Invalid command");
         }
     }
 }
